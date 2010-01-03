@@ -743,28 +743,23 @@ APE_JS_NATIVE(apechannel_sm_ban)
     JSObject *user_obj;
     CHANNEL *chan = JS_GetPrivate(cx, obj);
 
-    *rval = JSVAL_FALSE;
-
     if (chan == NULL ||
-        !JSVAL_IS_OBJECT(argv[0]) || 
-        !JSVAL_IS_STRING(argv[1]) ||
-        !JSVAL_IS_STRING(argv[2]) ||
-        !JSVAL_IS_INT(argv[3])
-       ) {
-      return JS_TRUE;
-    }
-
-    JS_ConvertArguments(cx, 4, argv, "ossu", &user_obj, &ip, &reason, &expire);
-
-    if (!JS_InstanceOf(cx, user_obj, &user_class, 0) || (user = JS_GetPrivate(cx, user_obj)) == NULL ||
-	(strlen(ip) < 7) // min. 0.0.0.0 = 7 chars
+	!JSVAL_IS_OBJECT(argv[0]) ||
+	!JSVAL_IS_STRING(argv[1]) ||
+	!JSVAL_IS_STRING(argv[2]) ||
+	!JSVAL_IS_INT(argv[3]) ||
+	!JS_ConvertArguments(cx, 4, argv, "ossu", &user_obj, &ip, &reason, &expire) ||
+	!JS_InstanceOf(cx, user_obj, &user_class, 0) ||
+	(user = JS_GetPrivate(cx, user_obj)) == NULL ||
+	strlen(ip) < 3 /* min. ::1 (localhost) ipv6 */
 	) {
-	return JS_TRUE;
+	*rval = JSVAL_FALSE;
+    }
+    else {
+        ban(chan, user, ip, reason, expire, g_ape);
+	*rval = JSVAL_TRUE;
     }
 
-    ban(chan, user, ip, reason, expire, g_ape);
-
-    *rval = JSVAL_TRUE;
     return JS_TRUE;
 }
 
@@ -1409,7 +1404,8 @@ static unsigned int ape_sm_cmd_wrapper(callbackp *callbacki)
 		
 		hl = JS_DefineObject(cx, cb, "http", NULL, NULL, 0);		
 		
-		for (hlines = callbacki->hlines; hlines != NULL; hlines = hlines->next) {
+for (hlines = ((http_state *)callbacki->client->parser.data)->hlines; hlines != NULL; hlines = hlines->next) {
+//		for (hlines = callbacki->hlines; hlines != NULL; hlines = hlines->next) {
 			s_tolower(hlines->key.val, hlines->key.len);
 			jval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, hlines->value.val, hlines->value.len));
 			JS_SetProperty(cx, hl, hlines->key.val, &jval);
