@@ -737,30 +737,30 @@ APE_JS_NATIVE(apepipe_sm_send_response)
 
 APE_JS_NATIVE(apechannel_sm_ban)
 //{
-    char *ip, *reason;
-    unsigned int expire;
-    USERS *user;
-    JSObject *user_obj;
-    CHANNEL *chan = JS_GetPrivate(cx, obj);
+	char *ip, *reason;
+	unsigned int expire;
+	USERS *user;
+	JSObject *user_obj;
+	CHANNEL *chan = JS_GetPrivate(cx, obj);
 
-    if (chan == NULL ||
-	!JSVAL_IS_OBJECT(argv[0]) ||
-	!JSVAL_IS_STRING(argv[1]) ||
-	!JSVAL_IS_STRING(argv[2]) ||
-	!JSVAL_IS_INT(argv[3]) ||
-	!JS_ConvertArguments(cx, 4, argv, "ossu", &user_obj, &ip, &reason, &expire) ||
-	!JS_InstanceOf(cx, user_obj, &user_class, 0) ||
-	(user = JS_GetPrivate(cx, user_obj)) == NULL ||
-	strlen(ip) < 3 /* min. ::1 (localhost) ipv6 */
-	) {
-	*rval = JSVAL_FALSE;
-    }
-    else {
-        ban(chan, user, ip, reason, expire, g_ape);
-	*rval = JSVAL_TRUE;
-    }
-
-    return JS_TRUE;
+	if 	(	chan == NULL ||
+			!JSVAL_IS_OBJECT(argv[0]) ||
+			!JSVAL_IS_STRING(argv[1]) ||
+			!JSVAL_IS_STRING(argv[2]) ||
+			!JSVAL_IS_INT(argv[3]) ||
+			!JS_ConvertArguments(cx, 4, argv, "ossu", &user_obj, &ip, &reason, &expire) ||
+			!JS_InstanceOf(cx, user_obj, &user_class, 0) ||
+			(user = JS_GetPrivate(cx, user_obj)) == NULL ||
+			strlen(ip) < 3 /* min. ::1 (localhost) ipv6 */
+		) {
+		*rval = JSVAL_FALSE;
+	}
+	else {
+        	ban(chan, user, ip, reason, expire, g_ape);
+		*rval = JSVAL_TRUE;
+    	}
+	
+	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apechannel_sm_get_property)
