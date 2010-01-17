@@ -26,6 +26,7 @@
 #include "json.h"
 #include "raw.h"
 #include "plugins.h"
+#include "channel_history.h"
 
 unsigned int isvalidchan(char *name) 
 {
@@ -64,6 +65,8 @@ CHANNEL *mkchan(char *chan, int flags, acetables *g_ape)
 	new_chan->banned = NULL;
 	new_chan->properties = NULL;
 	new_chan->flags = flags | (*new_chan->name == '*' ? CHANNEL_NONINTERACTIVE : 0);
+
+	new_chan->history = init_channel_history(new_chan, g_ape->srv);
 
 	//memcpy(new_chan->topic, topic, strlen(topic)+1);
 
@@ -124,6 +127,7 @@ void rmchan(CHANNEL *chan, acetables *g_ape)
 	
 	destroy_pipe(chan->pipe, g_ape);
 	
+	free_channel_history(chan->history);
 	free(chan);
 	chan = NULL;
 }
@@ -196,7 +200,8 @@ void join(USERS *user, CHANNEL *chan, acetables *g_ape)
 
 	newraw = forge_raw(RAW_CHANNEL, jlist);
 	post_raw(newraw, user, g_ape);
-	
+	post_channel_history(chan, user, g_ape);
+
 	#if 0
 	if (user->flags & FLG_AUTOOP) {
 		setlevel(NULL, user, chan, 3);
@@ -376,6 +381,38 @@ unsigned int setlevel(USERS *user_actif, USERS *user_passif, CHANNEL *chan, unsi
 		return 1;
 	}
 	return 0;
+}
+
+void setflags(CHANNEL *chan, int flags) {
+	chan->flags = flags;
+}
+
+int getflags(CHANNEL *chan) {
+	return chan->flags;
+}
+
+unsigned int setflags_cmd(USERS *user, CHANNEL *chan, int flags, acetables *g_ape) {
+	RAW *newraw;
+	userslist *list;
+	json_item *jlist;
+	
+	list = getuchan(user, chan);
+	
+	if (list == NULL || list->level < 3) {		
+		send_error(user, "SETFLAGS_ERROR", "112", g_ape);
+		return 0;		
+	} 
+
+	setflags(chan, flags);
+	
+	jlist = json_new_object();
+	json_set_property_objN(jlist, "user", 4, get_json_object_user(user));
+	json_set_property_objN(jlist, "pipe", 4, get_json_object_channel(chan));
+	
+	newraw = forge_raw(RAW_SETFLAGS, jlist);
+	post_raw_channel(newraw, chan, g_ape);
+	
+	return 1;
 }
 
 /*unsigned int settopic(USERS *user, CHANNEL *chan, const char *topic, acetables *g_ape)

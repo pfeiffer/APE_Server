@@ -40,6 +40,7 @@ char hex2int(unsigned char hex);
 int urldecode(char *string);
 int rand_n(int n);
 void s_tolower(char *upper, unsigned int len);
+void s_toupper(char *upper, unsigned int len);
 char *get_path(const char *full_path);
 
 /* CONST_STR_LEN from lighttpd */
@@ -52,5 +53,9 @@ char *get_path(const char *full_path);
 #ifndef MIN
   #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #endif
+
+#define S_TOLOWER(s) (s_tolower(s, strlen(s)))
+#define S_TOUPPER(s) (s_toupper(s, strlen(s)))
+
 
 #endif

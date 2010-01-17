@@ -22,6 +22,7 @@
 #include "raw.h"
 #include "users.h"
 #include "channel.h"
+#include "channel_history.h"
 #include "proxy.h"
 #include "utils.h"
 #include "plugins.h"
@@ -55,15 +56,15 @@ RAW *forge_raw(const char *raw, json_item *jlist)
 	new_raw->data = string->jstring;
 
 	free(string);
-
 	return new_raw;
 }
 
 int free_raw(RAW *fraw)
 {
-	if (--(fraw->refcount) <= 0) {
+	if (--(fraw->refcount) < 0) {
 		free(fraw->data);
 		free(fraw);
+		fraw = NULL;
 
 		return 0;
 	}
@@ -82,7 +83,6 @@ RAW *copy_raw(RAW *input)
     new_raw->data = xmalloc(sizeof(char) * (new_raw->len + 1));
 
     memcpy(new_raw->data, input->data, new_raw->len + 1);	
-
 	return new_raw;	
 }
 
@@ -120,9 +120,15 @@ void post_raw_sub(RAW *raw, subuser *sub, acetables *g_ape)
 void post_raw(RAW *raw, USERS *user, acetables *g_ape)
 {
 	subuser *sub = user->subuser;
-	while (sub != NULL) {
-		post_raw_sub(copy_raw_z(raw), sub, g_ape);
+
+	if (sub != NULL) {
+		post_raw_sub(raw, sub, g_ape);
 		sub = sub->next;
+
+		while (sub != NULL) {
+			post_raw_sub(copy_raw_z(raw), sub, g_ape);
+			sub = sub->next;
+		}
 	}
 }
 
@@ -134,6 +140,11 @@ void post_raw_restricted(RAW *raw, USERS *user, subuser *sub, acetables *g_ape)
 	if (sub == NULL) {
 		return;
 	}
+	if (sub != tSub) {
+		post_raw_sub(raw, tSub, g_ape);
+	}
+	tSub = tSub->next;
+
 	while (tSub != NULL) {
 		if (sub != tSub) {
 			post_raw_sub(copy_raw_z(raw), tSub, g_ape);
@@ -152,6 +163,11 @@ void post_raw_channel(RAW *raw, struct CHANNEL *chan, acetables *g_ape)
 	if (chan == NULL || raw == NULL || chan->head == NULL) {
 		return;
 	}
+
+	if (get_channel_max_history_size(chan) > 0) {
+		push_raw_to_channel_history(chan, copy_raw_z(raw), g_ape->srv);
+	}
+
 	list = chan->head;
 	while (list) {
 		post_raw(raw, list->userinfo, g_ape);
@@ -168,8 +184,12 @@ void post_raw_channel_restricted(RAW *raw, struct CHANNEL *chan, USERS *ruser, a
 	if (chan == NULL || raw == NULL || chan->head == NULL) {
 		return;
 	}
+
+	if (get_channel_max_history_size(chan) > 0) {
+		push_raw_to_channel_history(chan, copy_raw_z(raw), g_ape->srv);
+	}
+
 	list = chan->head;
-	
 	while (list) {
 		if (list->userinfo != ruser) {
 			post_raw(raw, list->userinfo, g_ape);
@@ -247,10 +267,16 @@ int post_to_pipe(json_item *jlist, const char *rawname, const char *pipe, subuse
 			post_raw(newraw, recver->pipe, g_ape);
 			break;
 		case CHANNEL_PIPE:
-			if (((CHANNEL*)recver->pipe)->head != NULL && ((CHANNEL*)recver->pipe)->head->next != NULL) {
+			if (((CHANNEL*)recver->pipe)->head != NULL) { 
 				json_set_property_objN(jlist, "pipe", 4, get_json_object_channel(recver->pipe));
 				newraw = forge_raw(rawname, jlist);
 				post_raw_channel_restricted(newraw, recver->pipe, sender, g_ape);
+
+				if (	((CHANNEL*)recver->pipe)->head->next == NULL &&
+					newraw != NULL // paranoia
+					) {
+					free_raw(newraw);	
+				}
 			}
 			break;
 		case CUSTOM_PIPE:

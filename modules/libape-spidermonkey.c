@@ -551,6 +551,7 @@ APE_JS_NATIVE(apepipe_sm_set_property)
 		case CHANNEL_PIPE:
 			/* Set property on directly on the channel (not on the pipe) */
 			add_property(&((CHANNEL *)(pipe->pipe))->properties, key, valuextend, typextend, EXTEND_ISPUBLIC);
+			update_chan_history_size((CHANNEL *)(pipe->pipe));
 			break;
 		case CUSTOM_PIPE:
 			add_property(&pipe->properties, key, valuextend, typextend, EXTEND_ISPUBLIC);
@@ -763,6 +764,19 @@ APE_JS_NATIVE(apechannel_sm_ban)
 	return JS_TRUE;
 }
 
+APE_JS_NATIVE(apechannel_sm_get_flags)
+//{
+	CHANNEL *chan = JS_GetPrivate(cx, obj);
+
+	if (chan == NULL) {
+		return JS_TRUE;
+	}
+
+	*rval = INT_TO_JSVAL(getflags(chan));
+	
+	return JS_TRUE;
+}
+
 APE_JS_NATIVE(apechannel_sm_get_property)
 //{
 	const char *property;
@@ -795,6 +809,23 @@ APE_JS_NATIVE(apechannel_sm_get_property)
 	return JS_TRUE;
 }
 
+APE_JS_NATIVE(apechannel_sm_set_flags)
+//{
+	int flags;
+
+	CHANNEL *chan = JS_GetPrivate(cx, obj);
+	
+	if (	chan == NULL || 
+		!JSVAL_IS_INT(argv[1]) ||
+		!JS_ConvertArguments(cx, 1, argv, "i", &flags)
+		) {
+		return JS_TRUE;
+	}
+
+	setflags(chan, flags);
+	return JS_TRUE;
+}
+
 APE_JS_NATIVE(apechannel_sm_set_property)
 //{
 	char *key;
@@ -821,7 +852,8 @@ APE_JS_NATIVE(apechannel_sm_set_property)
 		add_property(&chan->properties, key, JS_GetStringBytes(property), EXTEND_STR, EXTEND_ISPUBLIC);
 	}
 
-	
+	update_chan_history_size(chan);
+
 	return JS_TRUE;
 }
 
@@ -1041,6 +1073,8 @@ static JSFunctionSpec apechannel_funcs[] = {
 	JS_FS("getProperty", apechannel_sm_get_property, 1, 0, 0),
 	JS_FS("setProperty", apechannel_sm_set_property, 2, 0, 0),
 	JS_FS("isInteractive", apechannel_sm_isinteractive, 1, 0, 0),
+	JS_FS("getFlags", apechannel_sm_get_flags, 0, 0, 0),
+	JS_FS("setFlags", apechannel_sm_set_flags, 1, 0, 0),
 	JS_FS("ban", apechannel_sm_ban, 4, 0, 0),
 	JS_FS_END
 };
@@ -1755,7 +1789,7 @@ APE_JS_NATIVE(ape_sm_rmchan)
 	} else {
 		return JS_TRUE;
 	}
-	
+
 	rmchan(chan, g_ape);
 	
 	return JS_TRUE;
@@ -3052,7 +3086,7 @@ static void ape_cb_rmchan(CHANNEL *chan, acetables *g_ape)
 	JSContext *gcx = ASMC;
 	
 	params[0] = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan));
-	
+
 	APE_JS_EVENT("rmchan", 1, params);
 	
 	jsobj = get_property(chan->properties, "jsobj");

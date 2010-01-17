@@ -49,6 +49,7 @@ struct _extend
 };
 
 extend *get_property(extend *entry, const char *key);
+void *get_property_val(extend *entry, const char *key);
 void clear_properties(extend **entry);
 void del_property(extend **entry, const char *key);
 //extend *add_property_str(extend **entry, char *key, char *val);

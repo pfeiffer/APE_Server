@@ -40,6 +40,7 @@ typedef struct CHANNEL
 
 	struct _transpipe *pipe;
 	struct userslist *head;
+	struct CHANNEL_HISTORY_DEQUE *history;
 	
 	struct BANNED *banned;
 	
@@ -85,6 +86,9 @@ unsigned int setlevel(struct USERS *user_actif, struct USERS *user_passif, CHANN
 unsigned int isvalidchan(char *name);
 
 json_item *get_json_object_channel(CHANNEL *chan);
+
+void setflags(CHANNEL *chan, int flags);
+int getflags(CHANNEL *chan);
 
 #endif
 

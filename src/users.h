@@ -199,6 +199,7 @@ enum {
 #define RAW_LEFT 		"LEFT"
 #define RAW_SETLEVEL 		"SETLVL"
 #define RAW_SETTOPIC 		"SETTOPIC"
+#define RAW_SETFLAGS		"SETFLAGS"
 #define RAW_USER 		"USER"
 #define RAW_ERR 		"ERR"
 #define RAW_CHANNEL		"CHANNEL"

@@ -55,6 +55,15 @@ void s_tolower(char *upper, unsigned int len)
 	}
 }
 
+void s_toupper(char *lower, unsigned int len)
+{
+	unsigned int i;
+	
+	for (i = 0; i < len; i++) {
+		lower[i] = toupper(lower[i]);
+	}
+}
+
 long int itos(long int input, char *output, long int len)
 {
 	int sign = 0, i = 1;
