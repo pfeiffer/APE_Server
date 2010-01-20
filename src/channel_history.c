@@ -124,9 +124,9 @@ void push_raw_to_channel_history(CHANNEL *chan, RAW *raw, apeconfig *config) {
 	if (chan == NULL || chan->history == NULL) return;
 	
 	if (chan->history->filter != NULL) {
-		ITERATE_CONFIG_VAL(chan->history->filter, " ", {
-				char *type = strstr(raw->data, "\"raw\":\"");
+		char *type = strstr(raw->data, "\"raw\":\"");
 
+		ITERATE_CONFIG_VAL(chan->history->filter, " ", {
 				if (type == NULL || strncmp(type+7, token, strlen(token)) != 0) {
 					free_raw(raw);
 					return;
