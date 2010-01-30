@@ -912,10 +912,10 @@ APE_JS_NATIVE(apeuser_sm_quit)
 	if (user == NULL) {
 		return JS_TRUE;
 	}
-
+	
 	deluser(user, g_ape);
-
-	return JS_TRUE;	
+	
+	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apeuser_sm_join)
