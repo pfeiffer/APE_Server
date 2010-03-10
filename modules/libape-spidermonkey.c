@@ -1375,6 +1375,7 @@ static void reportError(JSContext *cx, const char *message, JSErrorReport *repor
 
 static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *root)
 {
+	JS_EnterLocalRootScope(cx);
 	while (head != NULL) {
 		if (head->jchild.child == NULL && head->key.val != NULL) {
 			jsval jval;
@@ -1382,7 +1383,6 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 			if (root == NULL) {
 				root = JS_NewObject(cx, NULL, NULL, NULL);
 			}
-			JS_AddRoot(cx, &root);
 			
 			if (head->jval.vu.str.value != NULL) {
 				jval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, head->jval.vu.str.value, head->jval.vu.str.length));
@@ -1397,8 +1397,7 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 
 			if (root == NULL) {
 				root = JS_NewArrayObject(cx, 0, NULL);
-			}
-			JS_AddRoot(cx, &root);			
+			}			
 			
 			if (head->jval.vu.str.value != NULL) {	
 				jval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, head->jval.vu.str.value, head->jval.vu.str.length));
@@ -1406,7 +1405,7 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 				jsdouble dp = (head->jval.vu.integer_value ? head->jval.vu.integer_value : head->jval.vu.float_value);
 				JS_NewNumberValue(cx, dp, &jval);
 			}
-			/* TODO : jsdouble can be garbaged in the next call */
+
 			if (JS_GetArrayLength(cx, root, &rval)) {
 				JS_SetElement(cx, root, rval, &jval);
 			}			
@@ -1426,14 +1425,12 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 			
 			ape_json_to_jsobj(cx, head->jchild.child, cobj);
 
-			JS_AddRoot(cx, &cobj);
 
 			if (head->key.val != NULL) {
 				jsval jval;
 
 				if (root == NULL) {
 					root = JS_NewObject(cx, NULL, NULL, NULL);
-					JS_AddRoot(cx, &root);
 				}
 				
 				jval = OBJECT_TO_JSVAL(cobj);
@@ -1444,25 +1441,21 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 
 				if (root == NULL) {
 					root = JS_NewArrayObject(cx, 0, NULL);
-					JS_AddRoot(cx, &root);
 				}
 				
 				jval = OBJECT_TO_JSVAL(cobj);
+				
 				if (JS_GetArrayLength(cx, root, &rval)) {
 					JS_SetElement(cx, root, rval, &jval);
 				}								
 			}
 
-			JS_RemoveRoot(cx, &cobj);
 			
 		}
 		head = head->next;
 	}
 
-	if (root != NULL) {
-		JS_RemoveRoot(cx, &root);
-	}
-
+	JS_LeaveLocalRootScope(cx);
 	return root;
 }
 
@@ -2097,17 +2090,30 @@ struct _ape_sm_timer
 	uintN argc;
 	jsval *argv;
 	
+	int cleared;
+	struct _ticks_callback *timer;
 };
 
-static void ape_sm_timer_wrapper(struct _ape_sm_timer *params, int last)
+static void ape_sm_timer_wrapper(struct _ape_sm_timer *params, int *last)
 {
 	jsval rval;
 	
 	//JS_SetContextThread(params->cx);
 	//JS_BeginRequest(params->cx);
-		JS_CallFunctionValue(params->cx, params->global, params->func, params->argc, params->argv, &rval);
-		if (last) {
+		if (!params->cleared) {
+			JS_CallFunctionValue(params->cx, params->global, params->func, params->argc, params->argv, &rval);
+		}
+		if (params->cleared) { /* JS_CallFunctionValue can set params->Cleared to true */
+			ape_sm_compiled *asc;
+			asc = JS_GetContextPrivate(params->cx);
+
+			if (!*last) {
+				*last = 1;
+			}
+		}
+		if (*last) {
 			JS_RemoveRoot(params->cx, &params->func);
+			
 			if (params->argv != NULL) {
 				free(params->argv);
 			}
@@ -2130,9 +2136,10 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	}
 	
 	params->cx = cx;
-	//params->global = asc->global;
 	params->global = obj;
 	params->argc = argc-2;
+	params->cleared = 0;
+	params->timer = NULL;
 	
 	params->argv = (argc-2 ? JS_malloc(cx, sizeof(*params->argv) * argc-2) : NULL);
 	
@@ -2145,7 +2152,6 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	}
 	
 	JS_AddRoot(cx, &params->func);
-	//JS_AddRoot(cx, &params->global);
 	
 	for (i = 0; i < argc-2; i++) {
 		params->argv[i] = argv[i+2];
@@ -2153,6 +2159,7 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	
 	timer = add_timeout(ms, ape_sm_timer_wrapper, params, g_ape);
 	timer->protect = 0;
+	params->timer = timer;
 	
 	*rval = INT_TO_JSVAL(timer->identifier);
 	
@@ -2175,6 +2182,8 @@ APE_JS_NATIVE(ape_sm_set_interval)
 	params->cx = cx;
 	params->global = asc->global;
 	params->argc = argc-2;
+	params->cleared = 0;
+	params->timer = NULL;
 	
 	params->argv = (argc-2 ? JS_malloc(cx, sizeof(*params->argv) * argc-2) : NULL);
 	
@@ -2193,6 +2202,8 @@ APE_JS_NATIVE(ape_sm_set_interval)
 	}
 	
 	timer = add_periodical(ms, 0, ape_sm_timer_wrapper, params, g_ape);
+	timer->protect = 0;
+	params->timer = timer;
 	
 	*rval = INT_TO_JSVAL(timer->identifier);
 	
@@ -2210,21 +2221,8 @@ APE_JS_NATIVE(ape_sm_clear_timeout)
 	}
 	
 	if ((timer = get_timer_identifier(identifier, g_ape)) != NULL && !timer->protect) {
-		JSContext *cx;
-		
 		params = timer->params;
-		
-		cx = params->cx;
-
-		JS_RemoveRoot(params->cx, &params->func);
-		
-		if (params->argv != NULL) {
-			JS_free(cx, params->argv);
-		}
-		JS_free(cx, params);
-		
-		del_timer(timer, g_ape);
-
+		params->cleared = 1;
 	}
 
 	return JS_TRUE;
